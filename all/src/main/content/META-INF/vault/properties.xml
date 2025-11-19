@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE properties SYSTEM "http://java.sun.com/dtd/properties.dtd">
+<properties>
+    <entry key="name">AEM Content Intelligence Suite</entry>
+    <entry key="description">Complete AI-powered content intelligence system for AEM Sites - Garage Week Winter 2025</entry>
+    <entry key="group">com.adobe.aem.intelligence</entry>
+    <entry key="version">1.0.0</entry>
+</properties>
+

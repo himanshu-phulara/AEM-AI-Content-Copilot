@@ -1,0 +1,25 @@
+═══════════════════════════════════════════════════════════════
+  COPY AND PASTE THIS INTO YOUR TERMINAL
+═══════════════════════════════════════════════════════════════
+
+cd /Users/hphulara/Documents/AEM/aem-ai-content-copilot && mvn clean package -DskipTests && curl -u admin:admin -F file=@"all/target/aem-ai-content-copilot.all-1.0.0.zip" -F name="aem-ai-content-copilot" -F force=true -F install=true http://localhost:4502/crx/packmgr/service.jsp
+
+═══════════════════════════════════════════════════════════════
+
+Or run each command separately:
+
+1. Build:
+   cd /Users/hphulara/Documents/AEM/aem-ai-content-copilot
+   mvn clean package -DskipTests
+
+2. Deploy:
+   curl -u admin:admin -F file=@"all/target/aem-ai-content-copilot.all-1.0.0.zip" -F name="aem-ai-content-copilot" -F force=true -F install=true http://localhost:4502/crx/packmgr/service.jsp
+
+═══════════════════════════════════════════════════════════════
+After deployment:
+1. Refresh your browser (Cmd+R)
+2. Open Console (F12)
+3. Generate content and click Apply
+4. Look for 🔍 and ✅ emoji in logs!
+═══════════════════════════════════════════════════════════════
+

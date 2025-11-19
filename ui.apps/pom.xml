@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.adobe.aem.intelligence</groupId>
+        <artifactId>aem-ai-content-copilot</artifactId>
+        <version>1.0.0</version>
+        <relativePath>../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>aem-ai-content-copilot.ui.apps</artifactId>
+    <packaging>content-package</packaging>
+
+    <name>AEM AI Content Copilot - UI Apps</name>
+    <description>UI Apps package containing overlays and clientlibs</description>
+
+    <build>
+        <sourceDirectory>src/main/content/jcr_root</sourceDirectory>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.jackrabbit</groupId>
+                <artifactId>filevault-package-maven-plugin</artifactId>
+                <version>1.3.2</version>
+                <extensions>true</extensions>
+                <configuration>
+                    <group>com.adobe.aem.intelligence</group>
+                    <name>aem-ai-content-copilot.ui.apps</name>
+                    <packageType>application</packageType>
+                    <accessControlHandling>merge</accessControlHandling>
+                    <validatorsSettings>
+                        <jackrabbit-filter>
+                            <options>
+                                <validRoots>/apps/intelligence</validRoots>
+                            </options>
+                        </jackrabbit-filter>
+                    </validatorsSettings>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+
+    <dependencies>
+        <dependency>
+            <groupId>com.adobe.aem.intelligence</groupId>
+            <artifactId>aem-ai-content-copilot.core</artifactId>
+            <version>1.0.0</version>
+        </dependency>
+    </dependencies>
+</project>
+

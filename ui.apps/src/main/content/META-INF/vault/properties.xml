@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE properties SYSTEM "http://java.sun.com/dtd/properties.dtd">
+<properties>
+    <entry key="name">AEM Content Intelligence - UI Apps</entry>
+    <entry key="description">AI-powered content intelligence for AEM Sites</entry>
+    <entry key="group">com.adobe.aem.intelligence</entry>
+    <entry key="version">1.0.0</entry>
+</properties>
+

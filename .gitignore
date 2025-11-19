@@ -1,0 +1,116 @@
+# Maven
+target/
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+dependency-reduced-pom.xml
+buildNumber.properties
+.mvn/timing.properties
+
+# Compiled class files
+*.class
+
+# Package Files
+*.jar
+*.war
+*.nar
+*.ear
+*.zip
+*.tar.gz
+*.rar
+
+# Logs
+*.log
+logs/
+
+# IDE - IntelliJ IDEA
+.idea/
+*.iml
+*.iws
+*.ipr
+out/
+
+# IDE - Eclipse
+.project
+.classpath
+.settings/
+.metadata
+bin/
+tmp/
+*.tmp
+*.bak
+*.swp
+*~.nib
+local.properties
+.loadpath
+.recommenders
+
+# IDE - VS Code
+.vscode/
+*.code-workspace
+
+# OS Files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Desktop.ini
+
+# AEM Specific
+vault-work/
+*.content.xml~
+error.log
+request.log
+access.log
+
+# Node/NPM (if using frontend build tools)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Manual build directory (contains duplicates)
+manual-build/
+
+# Backup files
+*.backup
+*-backup
+*.orig
+
+# Temporary files
+temp/
+tmp/
+*.cache
+
+# Environment files (if containing secrets)
+.env
+.env.local
+.env.*.local
+
+# Package manager locks (optional - comment out if you want to commit them)
+# package-lock.json
+# yarn.lock
+# pom.xml.versionsBackup
+
+# Test coverage
+coverage/
+*.lcov
+
+# Build scripts outputs
+build/
+dist/
+
+# Deployment scripts (with credentials)
+deploy-with-credentials.sh
+
+# JCR metadata
+.vlt
+.vlt-sync.log
+.vlt-sync-config.properties
+

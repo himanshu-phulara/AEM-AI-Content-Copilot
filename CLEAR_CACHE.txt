@@ -1,0 +1,46 @@
+═══════════════════════════════════════════════════════════════
+  CLEAR AEM CACHE - RUN THESE COMMANDS
+═══════════════════════════════════════════════════════════════
+
+The OLD code is cached. Run these in your terminal:
+
+1️⃣  REBUILD AEM CLIENTLIBS:
+───────────────────────────────────────────────────────────────
+curl -u admin:admin -X POST http://localhost:4502/libs/granite/ui/content/dumplibs.rebuild.html
+───────────────────────────────────────────────────────────────
+
+2️⃣  VERIFY NEW CODE IS DEPLOYED:
+───────────────────────────────────────────────────────────────
+curl -s -u admin:admin "http://localhost:4502/apps/intelligence/clientlibs/copilot/js/copilot.js" | grep "🔍"
+───────────────────────────────────────────────────────────────
+(Should return a line with 🔍 emoji if deployed correctly)
+
+3️⃣  IN YOUR BROWSER:
+───────────────────────────────────────────────────────────────
+   • Hard refresh: Cmd+Shift+R (Mac) or Ctrl+Shift+R (Windows)
+   • Or close and reopen the browser tab
+───────────────────────────────────────────────────────────────
+
+═══════════════════════════════════════════════════════════════
+WHAT YOU SHOULD SEE AFTER CACHE CLEAR:
+═══════════════════════════════════════════════════════════════
+
+OLD logs (cached - what you see now):
+   ❌ Found component element: <div class="cq-Overlay"...
+   ❌ Using component element directly as fallback
+
+NEW logs (after cache clear):
+   ✅ 🔍 Starting to look for component in ContentFrame...
+   ✅ ✅ Found ContentFrame, now searching for component...
+   ✅ Looking in ContentFrame for component with path:
+   ✅ MATCHED title component by path!
+
+═══════════════════════════════════════════════════════════════
+
+If new code still not showing, redeploy:
+───────────────────────────────────────────────────────────────
+cd /Users/hphulara/Documents/AEM/aem-ai-content-copilot
+mvn clean package -DskipTests
+curl -u admin:admin -F file=@"all/target/aem-ai-content-copilot.all-1.0.0.zip" -F name="aem-ai-content-copilot" -F force=true -F install=true http://localhost:4502/crx/packmgr/service.jsp
+───────────────────────────────────────────────────────────────
+
