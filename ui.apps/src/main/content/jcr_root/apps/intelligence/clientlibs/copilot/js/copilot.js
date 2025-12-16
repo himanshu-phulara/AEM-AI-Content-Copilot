@@ -20,7 +20,126 @@
     });
 
     // ============= COMPONENT SELECTOR & CONTENT INSERTION =============
-    
+
+    // Helper: toggle panel with slide-in/out animation and notifications
+    function togglePanel(forceOpen) {
+        const $panel = $('#ai-copilot-panel');
+        const isActive = $panel.hasClass('active');
+        const shouldOpen = (typeof forceOpen === 'boolean') ? forceOpen : !isActive;
+        if (shouldOpen) {
+            $panel.removeClass('closing').addClass('active');
+            showNotification('Co-Pilot opened', 'info');
+        } else {
+            if (!$panel.hasClass('active')) return;
+            $panel.addClass('closing');
+            setTimeout(() => {
+                $panel.removeClass('active closing');
+            }, 250);
+            showNotification('Co-Pilot closed', 'info');
+        }
+    }
+
+    // Helper: apply last viewed tab from localStorage
+    function applyLastTab() {
+        try {
+            const lastTab = localStorage.getItem('copilot:lastTab') || 'generate';
+            const $tabBtn = $(`.copilot-tab[data-tab="${lastTab}"]`);
+            if ($tabBtn.length) {
+                $tabBtn.click();
+            }
+        } catch (e) {}
+    }
+
+    // Helper: init draggable floating button with position persistence
+    function initDraggableButton() {
+        const $btn = $('#ai-copilot-button');
+        let isDragging = false;
+        let startX = 0, startY = 0;
+        let origLeft = null, origTop = null;
+
+        // Restore saved position
+        try {
+            const saved = JSON.parse(localStorage.getItem('copilot:btnPos') || '{}');
+            if (typeof saved.left === 'number' && typeof saved.top === 'number') {
+                $btn.css({ left: saved.left + 'px', top: saved.top + 'px', right: 'auto', bottom: 'auto' });
+            }
+        } catch (e) {}
+
+        const onMove = (clientX, clientY) => {
+            if (!isDragging) return;
+            const dx = clientX - startX;
+            const dy = clientY - startY;
+            const newLeft = Math.max(8, Math.min(window.innerWidth - 68, origLeft + dx));
+            const newTop = Math.max(8, Math.min(window.innerHeight - 68, origTop + dy));
+            $btn.css({ left: newLeft + 'px', top: newTop + 'px', right: 'auto', bottom: 'auto' });
+        };
+
+        const savePos = () => {
+            try {
+                const rect = $btn[0].getBoundingClientRect();
+                localStorage.setItem('copilot:btnPos', JSON.stringify({ left: rect.left, top: rect.top }));
+            } catch (e) {}
+        };
+
+        $btn.on('mousedown', function(e) {
+            if (e.button !== 0) return; // left click only
+            isDragging = true;
+            $btn.addClass('dragging');
+            startX = e.clientX;
+            startY = e.clientY;
+            const rect = $btn[0].getBoundingClientRect();
+            origLeft = rect.left;
+            origTop = rect.top;
+            e.preventDefault();
+        });
+
+        $(document).on('mousemove', function(e) {
+            if (!isDragging) return;
+            onMove(e.clientX, e.clientY);
+        });
+
+        $(document).on('mouseup', function() {
+            if (isDragging) {
+                isDragging = false;
+                $btn.removeClass('dragging');
+                savePos();
+            }
+        });
+
+        // Touch support
+        $btn.on('touchstart', function(e) {
+            const t = e.originalEvent.touches[0];
+            isDragging = true;
+            $btn.addClass('dragging');
+            startX = t.clientX;
+            startY = t.clientY;
+            const rect = $btn[0].getBoundingClientRect();
+            origLeft = rect.left;
+            origTop = rect.top;
+        });
+        $(document).on('touchmove', function(e) {
+            if (!isDragging) return;
+            const t = e.originalEvent.touches[0];
+            onMove(t.clientX, t.clientY);
+        });
+        $(document).on('touchend touchcancel', function() {
+            if (isDragging) {
+                isDragging = false;
+                $btn.removeClass('dragging');
+                savePos();
+            }
+        });
+    }
+
+    // Keyboard shortcut: Cmd/Ctrl + K to toggle
+    $(document).on('keydown', function(e) {
+        const isK = (e.key && e.key.toLowerCase() === 'k');
+        if (isK && (e.metaKey || e.ctrlKey)) {
+            e.preventDefault();
+            togglePanel();
+        }
+    });
+
     function showComponentSelector(content, contentType) {
         const components = detectEditableComponents();
         
@@ -566,30 +685,28 @@
             return;
         }
 
-        // Insert the content
+        // Insert the content directly (previous behavior)
         try {
             // Highlight the component briefly
             $component.addClass('content-inserting');
             console.log('Inserting content into element:', $textArea[0]);
-            
+
             setTimeout(function() {
                 try {
-                    let contentSet = false;
                     const originalContent = $textArea.text();
-                    
+
                     console.log('Current content:', originalContent);
                     console.log('New content to set:', content);
-                    
+
                     // Set the content - use text() for visible change
                     $textArea.text(content);
-                    contentSet = true;
-                    
+
                     // Force DOM update
                     $textArea[0].textContent = content;
-                    
+
                     console.log('Content after setting:', $textArea.text());
                     console.log('Content set successfully!');
-                    
+
                     // Highlight to show it worked
                     $component.removeClass('content-inserting');
                     $component.addClass('content-inserted');
@@ -597,25 +714,24 @@
                         'background-color': 'rgba(40, 167, 69, 0.2)',
                         'transition': 'background-color 0.5s'
                     });
-                    
+
                     setTimeout(function() {
                         $component.removeClass('content-inserted');
                         $textArea.css('background-color', '');
                     }, 2000);
-                    
+
                     // Copy to clipboard as backup
                     copyToClipboard(content);
-                    
+
                     // Show clear message about what happened
-                    showNotification(`✨ Content updated! Old: "${originalContent.substring(0, 20)}..." → New: "${content.substring(0, 20)}..."`, 'success');
-                    
+                    showNotification(`✨ Content updated! Old: "${(original-content||originalContent||'').toString().substring(0, 20)}..." → New: "${(content||'').toString().substring(0, 20)}..."`, 'success');
                 } catch (innerError) {
                     console.error('Error during content insertion:', innerError);
                     copyToClipboard(content);
                     showNotification('Content copied to clipboard. Please paste manually into the component.', 'info');
                 }
             }, 300);
-            
+
         } catch (error) {
             console.error('Error applying content:', error);
             showNotification('Failed to apply content: ' + error.message, 'error');
@@ -643,6 +759,13 @@
 
         // Extract page context
         extractPageContext();
+
+        // Enhance UX: last tab + draggable button
+        applyLastTab();
+        initDraggableButton();
+
+		// Initialize Generate preset (segmented control)
+		initGeneratePreset();
     }
 
     // Extract page context from AEM editor
@@ -707,9 +830,137 @@
     }
 
     function getComponentCount() {
-        // Count editable components on the page
-        const editables = document.querySelectorAll('.cq-Editable');
-        return editables.length;
+		// Count only content-bearing components by resourceType (WKND)
+		const TARGET_RESOURCE_TYPES = new Set([
+			'wknd/components/text',
+			'wknd/components/title',
+			'wknd/components/image',
+			'wknd/components/teaser'
+		]);
+
+		// Prefer counting components within the editor ContentFrame (actual page DOM)
+		const frameSelectors = ['iframe#ContentFrame', 'iframe[name="ContentFrame"]', 'iframe.editor-Frame'];
+		let contentDoc = null;
+		for (let sel of frameSelectors) {
+			const frame = document.querySelector(sel);
+			if (frame && frame.contentDocument) {
+				contentDoc = frame.contentDocument;
+				break;
+			}
+		}
+
+		try {
+			if (contentDoc) {
+				// Find components whose data layer encodes resourceType, or wrappers with path and resource hint
+				const uniquePaths = new Set();
+
+				// 1) Parse Core Components data layer attribute if present
+				const dataLayerNodes = contentDoc.querySelectorAll('[data-cmp-data-layer]');
+				for (let i = 0; i < dataLayerNodes.length; i++) {
+					const node = dataLayerNodes[i];
+					const dl = node.getAttribute('data-cmp-data-layer');
+					if (!dl) continue;
+					try {
+						// Some components put a JSON object keyed by id; handle both stringified object and direct object
+						const parsed = JSON.parse(dl);
+						// Inspect values for a resourceType-like field
+						const entries = Array.isArray(parsed) ? parsed : Object.values(parsed);
+						for (let j = 0; j < entries.length; j++) {
+				 			const v = entries[j];
+				 			// Common shapes: { '@type': 'wknd/components/text', ... } or { 'xdm:component': 'wknd/components/text', ... }
+				 			const rt = (v && (v['@type'] || v['xdm:component'] || v['resourceType'])) || '';
+				 			if (rt && TARGET_RESOURCE_TYPES.has(rt)) {
+				 				const container = node.closest('[data-cmp-path],[data-path]') || node;
+				 				const path = (container.getAttribute && (container.getAttribute('data-cmp-path') || container.getAttribute('data-path'))) || '';
+				 				if (path && path.includes('/jcr:content/')) {
+				 					uniquePaths.add(path);
+				 				}
+				 			}
+						}
+					} catch (_e) {
+						// ignore parse errors
+					}
+				}
+
+				// 2) Heuristic: match by resourceType in common author attributes if present
+				if (uniquePaths.size === 0) {
+					const candidates = contentDoc.querySelectorAll('[data-resource-type],[data-resourcetype],[data-rt],[data-component]');
+					for (let i = 0; i < candidates.length; i++) {
+						const el = candidates[i];
+						const rt = el.getAttribute('data-resource-type')
+							|| el.getAttribute('data-resourcetype')
+							|| el.getAttribute('data-rt')
+							|| el.getAttribute('data-component')
+							|| '';
+						if (rt && TARGET_RESOURCE_TYPES.has(rt)) {
+							const container = el.closest('[data-cmp-path],[data-path]') || el;
+							const path = (container.getAttribute && (container.getAttribute('data-cmp-path') || container.getAttribute('data-path'))) || '';
+							if (path && path.includes('/jcr:content/')) {
+								uniquePaths.add(path);
+							}
+						}
+					}
+				}
+
+				// 3) Last resort within ContentFrame: infer by resourceType suffix combined with data-path
+				if (uniquePaths.size === 0) {
+					const names = [
+						['/text', ['.cmp-text', '[data-cmp-is="text"]']],
+						['/title', ['.cmp-title', '[data-cmp-is="title"]']],
+						['/image', ['.cmp-image', '[data-cmp-is="image"]']],
+						['/teaser', ['.cmp-teaser', '[data-cmp-is="teaser"]']]
+					];
+					for (let k = 0; k < names.length; k++) {
+						const selList = names[k][1];
+						for (let s = 0; s < selList.length; s++) {
+							const nodes = contentDoc.querySelectorAll(selList[s]);
+							for (let n = 0; n < nodes.length; n++) {
+								const container = nodes[n].closest('[data-cmp-path],[data-path]') || nodes[n];
+								const path = (container.getAttribute && (container.getAttribute('data-cmp-path') || container.getAttribute('data-path'))) || '';
+								if (path && path.includes('/jcr:content/')) {
+									uniquePaths.add(path);
+								}
+							}
+						}
+					}
+				}
+
+				if (uniquePaths.size > 0) return uniquePaths.size;
+			}
+		} catch (e) {
+			// ignore and try overlay-based fallback
+		}
+
+		// Overlay-based fallback: use Granite author overlay metadata
+		try {
+			const overlaySet = new Set();
+			// Prefer overlays that expose resource type
+			const overlays = document.querySelectorAll('.cq-Overlay[data-path]');
+			for (let i = 0; i < overlays.length; i++) {
+				const ov = overlays[i];
+				const path = ov.getAttribute('data-path') || '';
+				if (!path || !path.includes('/jcr:content/')) continue;
+				const rt = ov.getAttribute('data-resource-type') || ov.getAttribute('data-resourcetype') || '';
+				if (rt && TARGET_RESOURCE_TYPES.has(rt)) {
+					overlaySet.add(path);
+				}
+			}
+			// If overlays don't expose resource type, try Granite author API
+			if (overlaySet.size === 0 && window.Granite && window.Granite.author && Array.isArray(window.Granite.author.editables)) {
+				const editables = window.Granite.author.editables;
+				for (let i = 0; i < editables.length; i++) {
+					const ed = editables[i];
+					const path = ed && (ed.path || (ed.overlay && ed.overlay.dataset && ed.overlay.dataset.path)) || '';
+					const rt = ed && (ed.type || (ed.overlay && ed.overlay.dataset && (ed.overlay.dataset.resourceType || ed.overlay.dataset.resourcetype))) || '';
+					if (path && rt && path.includes('/jcr:content/') && TARGET_RESOURCE_TYPES.has(rt)) {
+						overlaySet.add(path);
+					}
+				}
+			}
+			if (overlaySet.size > 0) return overlaySet.size;
+		} catch (_e) {}
+
+		return 0;
     }
 
     function getImagesWithoutAlt() {
@@ -789,6 +1040,8 @@
                 <!-- Tabs -->
                 <div class="copilot-tabs">
                     <button class="copilot-tab active" data-tab="generate">Generate</button>
+                    <button class="copilot-tab" data-tab="brand">Brand Voice</button>
+                    <button class="copilot-tab" data-tab="vision">Vision AI</button>
                     <button class="copilot-tab" data-tab="seo">SEO</button>
                     <button class="copilot-tab" data-tab="variations">Variations</button>
                     <button class="copilot-tab" data-tab="suggest">Suggest</button>
@@ -799,36 +1052,67 @@
                 <div class="copilot-content">
                     <!-- Generate Tab -->
                     <div class="tab-content active" data-tab="generate">
-                        <div class="form-group">
-                            <label>What do you want to create?</label>
-                            <select id="generate-type">
-                                <option value="headlines">Headlines</option>
-                                <option value="bodycopy">Body Copy</option>
-                                <option value="metadescription">Meta Description</option>
-                                <option value="alttext">Alt Text</option>
-                            </select>
+                        <div class="generate-layout">
+                            <div class="generate-controls">
+                                <div class="form-group">
+                                    <label>What do you want to create?</label>
+                                    <select id="generate-preset-select">
+                                        <argument>Headlines</argument>
+                                        <option value="headlines">Headlines</option>
+                                        <option value="bodycopy">Body Copy</option>
+                                        <option value="metadescription">Meta Description</option>
+                                        <option value="alttext">Alt Text</option>
+                                    </select>
+                                </div>
+
+                                <div class="form-group" id="context-group">
+                                    <label>Context / Topic</label>
+                                    <textarea id="generate-context" placeholder="Describe your content topic or provide context..."></textarea>
+                                </div>
+
+                                <div class="form-group" id="tone-group" style="display:none;">
+                                    <label>Tone</label>
+                                    <select id="generate-tone">
+                                        <option value="professional">Professional</option>
+                                        <option value="casual">Casual</option>
+                                        <option value="creative">Creative</option>
+                                        <option value="technical">Technical</option>
+                                    </select>
+                                </div>
+
+                                <div class="form-group" id="count-group" style="display:none;">
+                                    <label>Number of Headlines</label>
+                                    <input type="number" id="generate-count" min="1" max="10" value="3"/>
+                                </div>
+
+                                <div class="form-group" id="length-group" style="display:none;">
+                                    <label>Length (words)</label>
+                                    <input type="range" id="generate-length" min="50" max="400" step="50" value="200"/>
+                                    <div style="font-size:12px;color:#666;margin-top:4px;">Target: <span id="generate-length-value">200</span> words</div>
+                                </div>
+
+                                <div class="form-group" id="variant-group" style="display:none;">
+                                    <label>Number of Variants</label>
+                                    <input type="number" id="body-variant-count" min="1" max="5" value="2" style="width:100px;"/>
+                                    <div class="tone-chips" style="margin-top:8px;">
+                                        <span class="tone-chip" data-tone="professional" style="cursor:pointer;padding:4px 8px;border:1px solid #ccc;border-radius:12px;margin-right:6px;">Professional</span>
+                                        <span class="tone-chip" data-tone="casual" style="cursor:pointer;padding:4px 8px;border:1px solid #ccc;border-radius:12px;margin-right:6px;">Casual</span>
+                                        <span class="tone-chip" data-tone="creative" style="cursor:pointer;padding:4px 8px;border:1px solid #ccc;border-radius:12px;margin-right:6px;">Creative</span>
+                                        <span class="tone-chip" data-tone="technical" style="cursor:pointer;padding:4px 8px;border:1px solid #ccc;border-radius:12px;">Technical</span>
+                                    </div>
+                                </div>
+
+                                <button class="btn btn-primary btn-block" id="generate-btn">
+                                    ✨ Generate Content
+                                </button>
+                                <button class="btn btn-secondary btn-block" id="generate-apply-btn" style="margin-top:8px;">
+                                    ✨ Generate + Apply
+                                </button>
+                            </div>
+                            <div class="generate-results-panel">
+                                <div id="generate-results"></div>
+                            </div>
                         </div>
-
-                        <div class="form-group" id="context-group">
-                            <label>Context / Topic</label>
-                            <textarea id="generate-context" placeholder="Describe your content topic or provide context..."></textarea>
-                        </div>
-
-                        <div class="form-group" id="tone-group" style="display:none;">
-                            <label>Tone</label>
-                            <select id="generate-tone">
-                                <option value="professional">Professional</option>
-                                <option value="casual">Casual</option>
-                                <option value="creative">Creative</option>
-                                <option value="technical">Technical</option>
-                            </select>
-                        </div>
-
-                        <button class="btn btn-primary btn-block" id="generate-btn">
-                            ✨ Generate Content
-                        </button>
-
-                        <div id="generate-results"></div>
                     </div>
 
                     <!-- SEO Tab -->
@@ -910,7 +1194,7 @@
                             <label>Content to Analyze</label>
                             <textarea id="predict-content" placeholder="Paste content to predict performance..."></textarea>
                         </div>
-
+                        
                         <div class="form-group">
                             <label>Content Type</label>
                             <select id="predict-type">
@@ -920,13 +1204,78 @@
                                 <option value="landing">Landing Page</option>
                             </select>
                         </div>
-
+                        
                         <button class="btn btn-primary btn-block" id="predict-btn">
                             📊 Predict Performance
                         </button>
-
+                        
                         <div id="predict-results"></div>
                     </div>
+
+                    <!-- Brand Voice Tab -->
+                    <div class="tab-content" data-tab="brand">
+                        <!-- Training Section -->
+                        <div class="form-group">
+                            <label>Brand Voice Training</label>
+                            <div id="brand-status" class="info-item" style="display:flex;align-items:center;gap:8px;">
+                                <span class="info-label">Status:</span>
+                                <span class="info-value" id="brand-status-text">Not trained</span>
+                            </div>
+                        </div>
+                        <button class="btn btn-secondary btn-block" id="brand-train-btn">
+                                🧠 Train on WKND Content
+                        </button>
+
+                        <hr style="margin:16px 0; border:0; border-top:1px solid #eee;"/>
+
+                        <!-- Testing Section -->
+                        <div class="form-group">
+                            <label>Topic</label>
+                            <textarea id="brand-topic" placeholder="e.g., Announce our new hiking backpack with key benefits..."></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label>Content Type</label>
+                            <select id="brand-content-type">
+                                <option value="general">General</option>
+                                <option value="product">Product</option>
+                                <option value="article">Article</option>
+                                <option value="landing">Landing Page</option>
+                            </select>
+                        </div>
+                        <div class="form-group" style="display:flex;align-items:center;gap:8px;">
+                            <input type="checkbox" id="brand-use-page-context"/>
+                            <label for="brand-use-page-context" style="margin:0;">Use current page as context</label>
+                        </div>
+                        <button class="btn btn-primary btn-block" id="brand-compare-btn">
+                                ⚖️ Compare Generic vs Brand Voice
+                        </button>
+
+                        <!-- Results -->
+                        <div id="brand-results" style="margin-top:16px;"></div>
+                    </div>
+
+                    <!-- Vision AI Tab -->
+                    <div class="tab-content" data-tab="vision">
+                        <div class="form-group">
+                            <label>DAM Image Path</label>
+                            <input type="text" id="vision-image-path" placeholder="e.g., /content/dam/wknd/en/adventures/himalaya.jpg"/>
+                        </div>
+                        <div class="form-group">
+                            <label>Analysis Type</label>
+                            <select id="vision-analysis-type">
+                                <option value="alt">Alt Text</option>
+                                <option value="seo">SEO</option>
+                                <option value="accessibility">Accessibility</option>
+                                <option value="objects">Objects</option>
+                            </select>
+                        </div>
+                        <button class="btn btn-primary btn-block" id="vision-analyze-btn">
+                                👁️ Analyze Image
+                        </button>
+                        <div id="vision-results" style="margin-top:16px;"></div>
+                    </div>
+
+                   
                 </div>
             </div>
         `;
@@ -935,13 +1284,16 @@
     }
 
     function bindEvents() {
+        // Local state for Brand Voice
+        let brandProfileId = null;
+
         // Toggle panel
         $(document).on('click', '#ai-copilot-button', function() {
-            $('#ai-copilot-panel').toggleClass('active');
+            togglePanel();
         });
 
         $(document).on('click', '.copilot-close', function() {
-            $('#ai-copilot-panel').removeClass('active');
+            togglePanel(false);
         });
 
         // Tab switching
@@ -951,17 +1303,23 @@
             $(this).addClass('active');
             $('.tab-content').removeClass('active');
             $(`.tab-content[data-tab="${tab}"]`).addClass('active');
+            try { localStorage.setItem('copilot:lastTab', tab); } catch (e) {}
         });
 
-        // Generate type change
-        $(document).on('change', '#generate-type', function() {
-            const type = $(this).val();
-            updateGenerateForm(type);
+        // Generate preset change (dropdown)
+        $(document).on('change', '#generate-preset-select', function() {
+            const preset = $(this).val();
+            setGeneratePreset(preset, true);
         });
 
         // Generate button
         $(document).on('click', '#generate-btn', function() {
-            handleGenerate();
+			handleGenerate(false);
+		});
+
+		// Generate + Apply button
+		$(document).on('click', '#generate-apply-btn', function() {
+			handleGenerate(true);
         });
 
         // Analyze Page button
@@ -1003,6 +1361,75 @@
             handlePredict();
         });
 
+        // (removed) Structure tab/button
+
+        // Vision AI: analyze image
+        $(document).on('click', '#vision-analyze-btn', function() {
+            handleVisionAnalyze();
+        });
+
+        // Brand voice: train
+        $(document).on('click', '#brand-train-btn', async function() {
+            const btn = $('#brand-train-btn');
+            const statusText = $('#brand-status-text');
+            btn.addClass('loading').prop('disabled', true);
+            try {
+                // Train on WKND content root
+                const result = await window.ContentIntelligenceAPI.trainBrandVoice('/content/wknd/us');
+                if (result && result.success && result.profileId) {
+                    brandProfileId = result.profileId;
+                    statusText.text(`Trained (Profile: ${brandProfileId.substring(0, 8)}...)`);
+                    showNotification('Brand voice trained successfully!', 'success');
+                } else {
+                    const err = (result && result.error) ? result.error : 'Training failed';
+                    showNotification(err, 'error');
+                }
+            } catch (e) {
+                showNotification(e.message || 'Training error', 'error');
+            } finally {
+                btn.removeClass('loading').prop('disabled', false);
+            }
+        });
+
+        // Brand voice: compare
+        $(document).on('click', '#brand-compare-btn', async function() {
+            const topic = $('#brand-topic').val().trim();
+            const contentType = $('#brand-content-type').val();
+            const usePageContext = $('#brand-use-page-context').is(':checked');
+            const btn = $('#brand-compare-btn');
+            const resultsDiv = $('#brand-results');
+            if (!topic) {
+                showError(resultsDiv, 'Please enter a topic');
+                return;
+            }
+            btn.addClass('loading').prop('disabled', true);
+            resultsDiv.empty();
+            try {
+                const prompt = `Topic: ${topic}\nContent Type: ${contentType}`;
+                // Prefer passing profileId to use trained brand voice
+                const payload = { action: 'brandvoice', prompt: prompt, maxTokens: 150 };
+                if (brandProfileId) payload.profileId = brandProfileId;
+                if (usePageContext && window.pageContext && window.pageContext.content) {
+                    payload.context = window.pageContext.content;
+                }
+                const result = await window.ContentIntelligenceAPI._post('/generate', payload);
+                if (result && result.success) {
+                    displayBrandComparison({
+                        generic: result.generic || '',
+                        brand: result.brand || '',
+                        profileId: result.profileId || brandProfileId || ''
+                    }, resultsDiv);
+                } else {
+                    const err = (result && result.error) ? result.error : 'Comparison failed';
+                    showError(resultsDiv, err);
+                }
+            } catch (e) {
+                showError(resultsDiv, e.message || 'Comparison error');
+            } finally {
+                btn.removeClass('loading').prop('disabled', false);
+            }
+        });
+
         // Copy result
         $(document).on('click', '.btn-copy', function() {
             const text = $(this).closest('.result-item').find('.result-text').text();
@@ -1023,6 +1450,38 @@
                 $('.modal-overlay').hide();
             }
         });
+        // Apply preview modal actions
+        $(document).on('click', '#apply-confirm-btn', function() {
+            const stash = window._copilotPendingApply;
+            if (!stash || !stash.element) { $('.modal-overlay').hide(); return; }
+            try {
+                const $el = $(stash.element);
+                const $comp = $(stash.component || $el);
+                const newText = String(stash.newContent || '');
+                const originalContent = $el.text();
+                $comp.addClass('content-inserting');
+                setTimeout(function() {
+                    try {
+                        $el.text(newText);
+                        $el[0].textContent = newText;
+                        $comp.removeClass('content-inserting').addClass('content-inserted');
+                        $el.css({'background-color':'rgba(40,167,69,0.2)','transition':'background-color 0.5s'});
+                        setTimeout(function(){ $comp.removeClass('content-inserted'); $el.css('background-color',''); }, 2000);
+                        copyToClipboard(newText);
+                        showNotification(`Applied. Old: "${(originalContent||'').substring(0,20)}..." → New: "${newText.substring(0,20)}..."`,'success');
+                    } catch(e){ console.error(e); }
+                }, 100);
+            } finally {
+                $('.modal-overlay').hide();
+                window._copilotPendingApply = null;
+            }
+        });
+        $(document).on('click', '#apply-cancel-btn', function() {
+            $('.modal-overlay').hide();
+            window._copilotPendingApply = null;
+        });
+
+        // (removed) refinement buttons for body copy
 
         // Component selection
         $(document).on('click', '.component-option', function() {
@@ -1057,35 +1516,51 @@
     function updateGenerateForm(type) {
         const contextLabel = $('#context-group label');
         const toneGroup = $('#tone-group');
+		const countGroup = $('#count-group');
+		const lengthGroup = $('#length-group');
 
         switch(type) {
             case 'headlines':
                 contextLabel.text('Context / Topic');
                 $('#generate-context').attr('placeholder', 'Describe your content topic...');
-                toneGroup.hide();
+                toneGroup.show();
+                countGroup.show();
+                lengthGroup.hide();
+                $('#variant-group').hide();
                 break;
             case 'bodycopy':
                 contextLabel.text('Topic');
                 $('#generate-context').attr('placeholder', 'What should the content be about?');
                 toneGroup.show();
+				countGroup.hide();
+				lengthGroup.show();
+                $('#variant-group').hide();
                 break;
             case 'metadescription':
                 contextLabel.text('Page Content Summary');
                 $('#generate-context').attr('placeholder', 'Summarize your page content...');
                 toneGroup.hide();
+				countGroup.hide();
+				lengthGroup.hide();
+                $('#variant-group').hide();
                 break;
             case 'alttext':
                 contextLabel.text('Image Description');
                 $('#generate-context').attr('placeholder', 'Describe what the image shows...');
                 toneGroup.hide();
+				countGroup.hide();
+				lengthGroup.hide();
+                $('#variant-group').hide();
                 break;
         }
     }
 
-    async function handleGenerate() {
-        const type = $('#generate-type').val();
+    async function handleGenerate(applyAfter = false) {
+        const type = ($('#generate-preset-select').val()) || 'headlines';
         const context = $('#generate-context').val().trim();
         const tone = $('#generate-tone').val();
+		const count = parseInt($('#generate-count').val() || '3', 10) || 3;
+		const wordCount = parseInt($('#generate-length').val() || '200', 10) || 200;
         const btn = $('#generate-btn');
         const resultsDiv = $('#generate-results');
 
@@ -1099,36 +1574,63 @@
 
         try {
             let result;
+			let contentToApply = null;
+			let applyType = 'text';
             
             switch(type) {
                 case 'headlines':
-                    result = await window.ContentIntelligenceAPI.generateHeadlines(context, 3);
+                    result = await window.ContentIntelligenceAPI.generateHeadlines(context, count);
                     if (result.success) {
                         displayHeadlines(result.headlines, resultsDiv);
+						if (applyAfter && Array.isArray(result.headlines) && result.headlines.length > 0) {
+							contentToApply = result.headlines[0];
+							applyType = 'headline';
+						}
                     }
                     break;
-                case 'bodycopy':
-                    result = await window.ContentIntelligenceAPI.generateBodyCopy(context, tone, 200);
-                    if (result.success) {
-                        displaySingleResult(result.content, resultsDiv);
+                case 'bodycopy': {
+                    const r = await window.ContentIntelligenceAPI.generateBodyCopy(context, getSelectedTone(), wordCount);
+                    if (r && r.success && r.content) {
+                        displaySingleResult(r.content, resultsDiv, 'body');
+                        if (applyAfter) {
+                            contentToApply = r.content;
+                            applyType = 'text';
+                        }
+                    } else {
+                        showError(resultsDiv, (r && r.error) ? r.error : 'Generation failed');
                     }
                     break;
-                case 'metadescription':
+                }
+                case 'metadescription': {
                     result = await window.ContentIntelligenceAPI.generateMetaDescription(context);
-                    if (result.success) {
-                        displaySingleResult(result.metaDescription, resultsDiv);
+                    if (result && result.success) {
+                        displaySingleResult(result.metaDescription, resultsDiv, 'meta');
+						if (applyAfter && result.metaDescription) {
+							contentToApply = result.metaDescription;
+							applyType = 'text';
+						}
+                    } else {
+                        showError(resultsDiv, (result && result.error) || 'Generation failed');
                     }
                     break;
+                }
                 case 'alttext':
                     result = await window.ContentIntelligenceAPI.generateAltText(context);
                     if (result.success) {
-                        displaySingleResult(result.altText, resultsDiv);
+                        displaySingleResult(result.altText, resultsDiv, 'alt');
+						if (applyAfter && result.altText) {
+							contentToApply = result.altText;
+							applyType = 'text';
+						}
                     }
                     break;
             }
 
-            if (!result.success) {
+            if (result && !result.success) {
                 showError(resultsDiv, result.error || 'Generation failed');
+            } else if (applyAfter && contentToApply) {
+				// Open component selector to apply the generated content
+				showComponentSelector(contentToApply, applyType);
             }
         } catch (error) {
             showError(resultsDiv, error.message);
@@ -1246,44 +1748,70 @@
         }
     }
 
+    // (removed) Structure handlers and helpers
+
     function displayHeadlines(headlines, container) {
         container.empty();
         const $resultBox = $('<div class="result-box"></div>');
-        
-        headlines.forEach(function(headline, index) {
+        headlines.forEach(function(headline) {
             const $item = $('<div class="result-item"></div>');
             const $text = $('<div class="result-text"></div>').text(headline);
+            const $meta = $('<div class="result-meta" style="font-size:12px;color:#666;margin-top:4px;"></div>').text(renderQualityMeta('headline', headline));
             const $actions = $('<div class="result-actions"></div>');
-            
             const $copyBtn = $('<button class="btn-icon btn-copy" title="Copy">📋</button>');
-            const $applyBtn = $('<button class="btn-icon btn-apply" title="Apply to Page">✨</button>')
-                .data('content', headline)
-                .data('type', 'headline');
-            
+            const $applyBtn = $('<button class="btn-icon btn-apply" title="Apply to Page">✨</button>').data('content', headline).data('type', 'headline');
             $actions.append($copyBtn, $applyBtn);
-            $item.append($text, $actions);
+            $item.append($text, $meta, $actions);
             $resultBox.append($item);
         });
-        
         container.append($resultBox);
     }
 
     function displaySingleResult(content, container, type = 'text') {
         container.empty();
+        appendSingleResult(content, container, type);
+    }
+
+    function appendSingleResult(content, container, type = 'text') {
         const $resultBox = $('<div class="result-box"></div>');
         const $item = $('<div class="result-item"></div>');
         const $text = $('<div class="result-text"></div>').text(content);
+        const $meta = $('<div class="result-meta" style="font-size:12px;color:#666;margin-top:4px;"></div>').text(renderQualityMeta(type, content));
         const $actions = $('<div class="result-actions"></div>');
-        
         const $copyBtn = $('<button class="btn-icon btn-copy" title="Copy">📋</button>');
-        const $applyBtn = $('<button class="btn-icon btn-apply" title="Apply to Page">✨</button>')
-            .data('content', content)
-            .data('type', type);
-        
-        $actions.append($copyBtn, $applyBtn);
-        $item.append($text, $actions);
+        const $applyBtn = $('<button class="btn-icon btn-apply" title="Apply to Page">✨</button>').data('content', content).data('type', type);
+        $actions.append($copyBtn);
+        $actions.append($applyBtn);
+        $item.append($text, $meta, $actions);
         $resultBox.append($item);
         container.append($resultBox);
+    }
+
+    function renderQualityMeta(type, text) {
+        const t = String(text || '');
+        if (type === 'headline') {
+            const len = t.length;
+            const good = (len >= 35 && len <= 65);
+            return `Length: ${len} ${good ? '✓' : len < 35 ? '(short)' : '(long)'}`;
+        }
+        if (type === 'meta' || type === 'alt') {
+            const len = t.length;
+            const good = (len >= 80 && len <= 160);
+            return `Length: ${len} ${good ? '✓' : len < 80 ? '(short)' : '(long)'}`;
+        }
+        if (type === 'body') {
+            const words = (t.trim().split(/\s+/) || []).filter(Boolean).length;
+            const mins = words / 200;
+            const time = mins < 1 ? `${Math.max(10, Math.round(mins*60))}s` : `${Math.round(mins)}m`;
+            return `${words} words • ~${time} read`;
+        }
+        const len = t.length;
+        return `Length: ${len}`;
+    }
+
+    function getSelectedTone() {
+        const v = $('#generate-tone').val();
+        return v || 'professional';
     }
 
     function displaySEOResults(analysis, container) {
@@ -1359,6 +1887,35 @@
         container.html(html);
     }
 
+    function displayBrandComparison(data, container) {
+        const profileInfo = data.profileId ? `Profile: ${data.profileId}` : 'Profile: (not set)';
+        const html = `
+            <div class="result-box" style="padding:0;">
+                <div style="display:flex; gap:16px; flex-wrap:wrap;">
+                    <div style="flex:1 1 300px; min-width:280px; border-right:1px solid #eee; padding:16px;">
+                        <div style="font-weight:600; margin-bottom:8px;">❌ Generic AI</div>
+                        <div class="result-item">
+                            <div class="result-text">${escapeHtml(data.generic || '')}</div>
+                        </div>
+                    </div>
+                    <div style="flex:1 1 300px; min-width:280px; padding:16px;">
+                        <div style="font-weight:600; margin-bottom:8px;">✅ Brand Voice</div>
+                        <div class="result-item">
+                            <div class="result-text">${escapeHtml(data.brand || '')}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="result-box" style="margin-top:12px;">
+                <strong style="display:block; margin-bottom:8px;">Style Profile</strong>
+                <div class="result-item">
+                    <div class="result-text">${escapeHtml(profileInfo)}</div>
+                </div>
+            </div>
+        `;
+        container.html(html);
+    }
+
     function showError(container, message) {
         container.html(`<div class="error-message">${escapeHtml(message)}</div>`);
     }
@@ -1404,6 +1961,14 @@
     function analyzeCurrentPage() {
         const context = extractPageContext();
         
+		// Update length slider label
+		try {
+			const $len = $('#generate-length');
+			if ($len.length) {
+				$('#generate-length-value').text($len.val());
+			}
+		} catch (e) {}
+        
         // Switch to SEO tab and auto-fill
         $('.copilot-tab[data-tab="seo"]').click();
         
@@ -1438,6 +2003,158 @@
             setTimeout(() => notification.remove(), 300);
         }, 3000);
     }
+
+	async function handleVisionAnalyze() {
+		const path = $('#vision-image-path').val().trim();
+		const analysis = $('#vision-analysis-type').val();
+		const btn = $('#vision-analyze-btn');
+		const resultsDiv = $('#vision-results');
+		if (!path) {
+			showError(resultsDiv, 'Please enter a DAM image path');
+			return;
+		}
+		if (!path.startsWith('/content/dam/')) {
+			showError(resultsDiv, 'Please provide a valid DAM path starting with /content/dam/');
+			return;
+		}
+		btn.addClass('loading').prop('disabled', true);
+		resultsDiv.empty();
+		try {
+			const prompt = buildVisionPrompt(analysis);
+			const result = await window.ContentIntelligenceAPI.analyzeImage(path, prompt);
+			if (result && result.success) {
+				displayVisionResults(result, resultsDiv);
+			} else {
+				const err = (result && result.error) ? result.error : 'Image analysis failed';
+				showError(resultsDiv, err);
+			}
+		} catch (e) {
+			showError(resultsDiv, e.message || 'Error analyzing image');
+		} finally {
+			btn.removeClass('loading').prop('disabled', false);
+		}
+	}
+
+    // Initialize preset dropdown and context-aware default
+	function initGeneratePreset() {
+		// Update length value label live
+		$(document).on('input change', '#generate-length', function() {
+			$('#generate-length-value').text($(this).val());
+		});
+
+		let preset = null;
+		try {
+			preset = localStorage.getItem('copilot:generatePreset') || null;
+		} catch (e) {}
+
+		if (!preset) {
+			preset = determinePresetFromSelection() || 'headlines';
+		}
+		setGeneratePreset(preset, false);
+	}
+
+	function setGeneratePreset(preset, persist = false) {
+        const $sel = $('#generate-preset-select');
+        if ($sel.length) {
+            $sel.val(preset);
+        }
+		updateGenerateForm(preset);
+		if (persist) {
+			try { localStorage.setItem('copilot:generatePreset', preset); } catch (e) {}
+		}
+	}
+
+	function determinePresetFromSelection() {
+		try {
+			// Granite overlay selection
+			const selected = document.querySelector('.cq-Overlay.is-selected, .cq-Overlay.is-active');
+			const rt = selected && (selected.getAttribute('data-resource-type') || selected.getAttribute('data-resourcetype')) || '';
+			const preset = presetForResourceType(rt);
+			if (preset) return preset;
+
+			// Try Granite author API
+			if (window.Granite && window.Granite.author && Array.isArray(window.Granite.author.editables)) {
+				const ed = window.Granite.author.editables.find(e => e && e.selected);
+				if (ed) {
+					const edRt = (ed.type) || (ed.overlay && ed.overlay.dataset && (ed.overlay.dataset.resourceType || ed.overlay.dataset.resourcetype)) || '';
+					const p = presetForResourceType(edRt);
+					if (p) return p;
+				}
+			}
+		} catch (e) {}
+		return null;
+	}
+
+	function presetForResourceType(rt) {
+		if (!rt) return null;
+		const lower = rt.toLowerCase();
+		if (lower.includes('/title')) return 'headlines';
+		if (lower.includes('/text')) return 'bodycopy';
+		if (lower.includes('/image')) return 'alttext';
+		return null;
+	}
+
+	function buildVisionPrompt(type) {
+		switch (type) {
+			case 'seo':
+				return "Describe this image for SEO: include key visual elements and keywords; then provide a concise alt text prefixed with 'ALT:'";
+			case 'accessibility':
+				return "Describe this image for screen readers in clear, neutral language (1-2 sentences), then a concise alt text prefixed with 'ALT:'";
+			case 'objects':
+				return "List key objects and scene elements you see, then provide a concise alt text prefixed with 'ALT:'";
+			case 'alt':
+			default:
+				return "Describe this image in 1-2 sentences and then provide a concise alt text prefixed with 'ALT:'";
+		}
+	}
+
+	function displayVisionResults(result, container) {
+		const description = result.description || '';
+		const alt = (result.altText || '').slice(0, 125);
+		const tags = Array.isArray(result.tags) ? result.tags : deriveTags(description);
+		const tagsStr = tags.join(', ');
+		const html = `
+			<div class="vision-results-box">
+				<div class="vision-image-preview">Image Preview (from DAM)</div>
+			</div>
+			<div class="result-box">
+				<strong style="display:block;margin-bottom:8px;">Full Description</strong>
+				<div class="result-item">
+					<div class="result-text">${escapeHtml(description)}</div>
+					<div class="result-actions"><button class="btn-icon btn-copy" title="Copy">📋</button></div>
+				</div>
+			</div>
+			<div class="result-box" style="margin-top:12px;">
+				<strong style="display:block;margin-bottom:8px;">Alt Text (≤125 chars)</strong>
+				<div class="result-item">
+					<div class="result-text">${escapeHtml(alt)}</div>
+					<div class="result-actions"><button class="btn-icon btn-copy" title="Copy">📋</button></div>
+				</div>
+			</div>
+			<div class="result-box" style="margin-top:12px;">
+				<strong style="display:block;margin-bottom:8px;">Suggested Tags</strong>
+				<div class="result-item">
+					<div class="result-text">
+						<div class="vision-tags">${tags.map(t => `<span class=\"tag-pill\">${escapeHtml(t)}</span>`).join(' ')}</div>
+					</div>
+					<div class="result-actions"><button class="btn-icon btn-copy" title="Copy">📋</button></div>
+				</div>
+			</div>
+		`;
+		container.html(html);
+	}
+
+	function deriveTags(text) {
+		if (!text) return [];
+		const stop = new Set(['the','and','with','for','that','this','from','into','over','under','near','on','in','at','to','a','an','of','by','is','are','it','as','be']);
+		const words = text.toLowerCase().replace(/[^a-z0-9\s]/g,'').split(/\s+/).filter(w => w && !stop.has(w) && w.length > 3);
+		const freq = {};
+		words.forEach(w => freq[w] = (freq[w] || 0) + 1);
+		return Object.entries(freq)
+			.sort((a,b) => b[1]-a[1])
+			.slice(0, 10)
+			.map(([w]) => w);
+	}
 
 })(window.jQuery || window.Granite.$, document);
 

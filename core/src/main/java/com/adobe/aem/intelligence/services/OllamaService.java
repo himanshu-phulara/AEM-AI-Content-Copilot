@@ -26,5 +26,17 @@ public interface OllamaService {
      * @return true if Ollama is running and responsive
      */
     boolean isAvailable();
+
+    /**
+     * Analyze an image using a vision-capable model (e.g., LLaVA) and return the model response.
+     * <p>
+     * The image content must be provided as a Base64-encoded string (raw bytes, without data URI prefix).
+     * The implementation will call the Ollama /api/generate endpoint with a vision model and an "images" array.
+     *
+     * @param imageBase64 base64-encoded image bytes
+     * @param prompt      analysis instruction/prompt (e.g., "Describe this image", "Generate alt text", etc.)
+     * @return model-generated text response
+     */
+    String analyzeImage(String imageBase64, String prompt);
 }
 

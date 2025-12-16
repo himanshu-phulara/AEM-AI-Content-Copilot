@@ -7,6 +7,7 @@
 
     const API = {
         baseUrl: '/bin/intelligence',
+        DEFAULT_TIMEOUT_MS: 20000,
 
         /**
          * Check health status of AI services
@@ -110,6 +111,53 @@
         },
 
         /**
+         * Suggest page structure (component sequence suggestions)
+         */
+        suggestStructure: async function(goal, audience, pageType, path) {
+            const payload = {
+                action: 'structure',
+                goal: goal,
+                audience: audience,
+                pageType: pageType
+            };
+            if (path) payload.path = path;
+            return await this._post('/generate', payload);
+        },
+
+        /**
+         * Generate copy in trained brand voice and also return generic AI for comparison
+         */
+        generateInBrandVoice: async function(topic, contentType = 'general', audience = 'default') {
+            const prompt = `Topic: ${topic}\nAudience: ${audience}\nContent Type: ${contentType}`;
+            return await this._post('/generate', {
+                action: 'brandvoice',
+                prompt: prompt,
+                maxTokens: 150
+            });
+        },
+
+        /**
+         * Train brand voice profile on a content root path
+         */
+        trainBrandVoice: async function(contentPath) {
+            return await this._post('/generate', {
+                action: 'trainbrand',
+                root: contentPath
+            });
+        },
+
+        /**
+         * Analyze an image from DAM and get description + alt text
+         */
+        analyzeImage: async function(imagePath, customPrompt) {
+            return await this._post('/generate', {
+                action: 'analyzeimage',
+                damPath: imagePath,
+                prompt: customPrompt || ''
+            });
+        },
+
+        /**
          * Get CSRF token from AEM
          */
         _getCSRFToken: async function() {
@@ -149,14 +197,35 @@
 
                 // Use GET with query parameters to avoid CSRF issues in editor
                 const queryString = formData.toString();
+
+                // Timeout support
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), this.DEFAULT_TIMEOUT_MS);
+                
                 const response = await fetch(`${this.baseUrl}${endpoint}?${queryString}`, {
                     method: 'GET',
-                    headers: headers
+                    headers: headers,
+                    signal: controller.signal
                 });
+                clearTimeout(timeoutId);
 
-                return await response.json();
+                // Friendly handling for non-OK
+                let payload;
+                try {
+                    payload = await response.json();
+                } catch (_e) {
+                    const text = await response.text();
+                    payload = { success: false, error: text || `Request failed (${response.status})` };
+                }
+                if (!response.ok) {
+                    return payload && typeof payload === 'object' ? payload : { success: false, error: `Request failed (${response.status})` };
+                }
+                return payload;
             } catch (error) {
                 console.error('API request failed:', error);
+                if (error && (error.name === 'AbortError' || error.message === 'The operation was aborted.')) {
+                    return { success: false, error: 'Request timed out. Please try again.' };
+                }
                 return {
                     success: false,
                     error: error.message
