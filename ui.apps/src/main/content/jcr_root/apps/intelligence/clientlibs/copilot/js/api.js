@@ -91,12 +91,15 @@
         /**
          * Suggest next component
          */
-        suggestComponent: async function(components, pageType) {
-            return await this._post('/generate', {
+        suggestComponent: async function(components, pageType, opts = {}) {
+            const payload = {
                 action: 'suggest',
                 components: components.join(','),
                 pageType: pageType
-            });
+            };
+            if (opts.profileId) payload.profileId = opts.profileId;
+            if (opts.context) payload.context = opts.context;
+            return await this._post('/generate', payload);
         },
 
         /**

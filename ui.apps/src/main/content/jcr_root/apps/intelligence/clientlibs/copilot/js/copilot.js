@@ -785,27 +785,75 @@
         setTimeout(() => {
             updatePageInfoDisplay(context);
         }, 100);
+        // Async refine from Page Properties (jcr:content)
+        tryRefreshTitlesFromPageProperties();
         
         return context;
     }
 
     function getPageTitle() {
-        // Try to get page title from various sources
-        let title = '';
-        
-        // From page properties panel
-        if (Granite && Granite.author && Granite.author.ContentFrame) {
-            const path = Granite.author.ContentFrame.currentPath || window.location.pathname;
-            // Extract page name from path
-            title = path.split('/').pop() || '';
-        }
-        
-        // From document title
-        if (!title) {
-            title = document.title.split('|')[0].trim();
-        }
-        
-        return title || 'Untitled Page';
+        // Prefer reading from the actual page inside the editor ContentFrame
+        try {
+            const frame = document.querySelector('iframe#ContentFrame') ||
+                          document.querySelector('iframe[name="ContentFrame"]') ||
+                          (window.Granite && window.Granite.author && window.Granite.author.ContentFrame) || null;
+            const doc = (frame && frame.contentDocument) || (frame && frame.document) || null;
+            if (doc) {
+                // 1) Meta tags commonly set by AEM
+                const dc = doc.querySelector('meta[name="dc:title"]');
+                if (dc && dc.content && dc.content.trim()) {
+                    return dc.content.trim();
+                }
+                const og = doc.querySelector('meta[property="og:title"]');
+                if (og && og.content && og.content.trim()) {
+                    return og.content.trim();
+                }
+                // 2) Page <title> inside the frame (often mapped from page properties)
+                if (doc.title && doc.title.trim()) {
+                    return doc.title.split('|')[0].trim();
+                }
+                // 3) Visible H1 that likely represents page title (avoid section headers)
+                const candidateH1 = doc.querySelector(
+                    '.cmp-title.cmp-title--page-title .cmp-title__text, .page-title h1, main h1[role="heading"][aria-level="1"], main h1.page-title'
+                ) || doc.querySelector('main h1, .cmp-title__text, h1');
+                if (candidateH1 && candidateH1.textContent && candidateH1.textContent.trim()) {
+                    const t = candidateH1.textContent.trim();
+                    const blacklist = ['recent articles', 'related articles', 'latest news'];
+                    if (!blacklist.includes(t.toLowerCase())) {
+                        return t;
+                    }
+                }
+            }
+        } catch (e) {}
+        // 4) Fallback: clean the path segment (avoid en/en.html)
+        try {
+            let path = (window.Granite && window.Granite.author && window.Granite.author.ContentFrame && window.Granite.author.ContentFrame.currentPath)
+                || window.location.pathname
+                || '';
+            if (path) {
+                let last = path.split('/').pop() || '';
+                last = last.replace(/\.html$/i, '');
+                // If last is a locale shard like 'en' or 'us', try previous segment
+                if (/^[a-z]{2}(-[A-Z]{2})?$/.test(last)) {
+                    const parts = path.split('/').filter(Boolean);
+                    if (parts.length >= 2) {
+                        last = parts[parts.length - 2].replace(/\.html$/i, '');
+                    }
+                }
+                if (last) {
+                    // Humanize: replace separators and capitalize first letter
+                    const human = last.replace(/[-_]/g, ' ').trim();
+                    if (human) return human.charAt(0).toUpperCase() + human.slice(1);
+                }
+            }
+        } catch (e) {}
+        // 5) Outer document title as absolute last resort
+        try {
+            if (document && document.title) {
+                return document.title.split('|')[0].trim() || 'Untitled Page';
+            }
+        } catch (e) {}
+        return 'Untitled Page';
     }
 
     function getPageContent() {
@@ -1041,11 +1089,10 @@
                 <div class="copilot-tabs">
                     <button class="copilot-tab active" data-tab="generate">Generate</button>
                     <button class="copilot-tab" data-tab="brand">Brand Voice</button>
+                    <button class="copilot-tab" data-tab="suggest">Suggest</button>
                     <button class="copilot-tab" data-tab="vision">Vision AI</button>
                     <button class="copilot-tab" data-tab="seo">SEO</button>
                     <button class="copilot-tab" data-tab="variations">Variations</button>
-                    <button class="copilot-tab" data-tab="suggest">Suggest</button>
-                    <button class="copilot-tab" data-tab="predict">Predict</button>
                 </div>
 
                 <!-- Content Area -->
@@ -1080,11 +1127,6 @@
                                     </select>
                                 </div>
 
-                                <div class="form-group" id="count-group" style="display:none;">
-                                    <label>Number of Headlines</label>
-                                    <input type="number" id="generate-count" min="1" max="10" value="3"/>
-                                </div>
-
                                 <div class="form-group" id="length-group" style="display:none;">
                                     <label>Length (words)</label>
                                     <input type="range" id="generate-length" min="50" max="400" step="50" value="200"/>
@@ -1104,9 +1146,6 @@
 
                                 <button class="btn btn-primary btn-block" id="generate-btn">
                                     ✨ Generate Content
-                                </button>
-                                <button class="btn btn-secondary btn-block" id="generate-apply-btn" style="margin-top:8px;">
-                                    ✨ Generate + Apply
                                 </button>
                             </div>
                             <div class="generate-results-panel">
@@ -1188,29 +1227,7 @@
                         <div id="suggest-results"></div>
                     </div>
 
-                    <!-- Predict Tab -->
-                    <div class="tab-content" data-tab="predict">
-                        <div class="form-group">
-                            <label>Content to Analyze</label>
-                            <textarea id="predict-content" placeholder="Paste content to predict performance..."></textarea>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label>Content Type</label>
-                            <select id="predict-type">
-                                <option value="general">General</option>
-                                <option value="product">Product</option>
-                                <option value="article">Article</option>
-                                <option value="landing">Landing Page</option>
-                            </select>
-                        </div>
-                        
-                        <button class="btn btn-primary btn-block" id="predict-btn">
-                            📊 Predict Performance
-                        </button>
-                        
-                        <div id="predict-results"></div>
-                    </div>
+                   
 
                     <!-- Brand Voice Tab -->
                     <div class="tab-content" data-tab="brand">
@@ -1304,6 +1321,9 @@
             $('.tab-content').removeClass('active');
             $(`.tab-content[data-tab="${tab}"]`).addClass('active');
             try { localStorage.setItem('copilot:lastTab', tab); } catch (e) {}
+            if (tab === 'seo') {
+                populateSeoFromContext();
+            }
         });
 
         // Generate preset change (dropdown)
@@ -1317,10 +1337,7 @@
 			handleGenerate(false);
 		});
 
-		// Generate + Apply button
-		$(document).on('click', '#generate-apply-btn', function() {
-			handleGenerate(true);
-        });
+		// (removed) Generate + Apply button
 
         // Analyze Page button
         $(document).on('click', '#analyze-page-btn', function() {
@@ -1356,10 +1373,7 @@
             handleSuggest();
         });
 
-        // Predict button
-        $(document).on('click', '#predict-btn', function() {
-            handlePredict();
-        });
+        // (removed) Predict button
 
         // (removed) Structure tab/button
 
@@ -1524,7 +1538,7 @@
                 contextLabel.text('Context / Topic');
                 $('#generate-context').attr('placeholder', 'Describe your content topic...');
                 toneGroup.show();
-                countGroup.show();
+                countGroup.hide();
                 lengthGroup.hide();
                 $('#variant-group').hide();
                 break;
@@ -1559,7 +1573,6 @@
         const type = ($('#generate-preset-select').val()) || 'headlines';
         const context = $('#generate-context').val().trim();
         const tone = $('#generate-tone').val();
-		const count = parseInt($('#generate-count').val() || '3', 10) || 3;
 		const wordCount = parseInt($('#generate-length').val() || '200', 10) || 200;
         const btn = $('#generate-btn');
         const resultsDiv = $('#generate-results');
@@ -1579,7 +1592,7 @@
             
             switch(type) {
                 case 'headlines':
-                    result = await window.ContentIntelligenceAPI.generateHeadlines(context, count);
+                    result = await window.ContentIntelligenceAPI.generateHeadlines(context, 1);
                     if (result.success) {
                         displayHeadlines(result.headlines, resultsDiv);
 						if (applyAfter && Array.isArray(result.headlines) && result.headlines.length > 0) {
@@ -1705,7 +1718,17 @@
         resultsDiv.empty();
 
         try {
-            const result = await window.ContentIntelligenceAPI.suggestComponent(components, pageType);
+            const opts = {};
+            // If a brand profile is available, pass it along with current page text as context
+            try {
+                if (typeof brandProfileId === 'string' && brandProfileId.length > 0) {
+                    opts.profileId = brandProfileId;
+                }
+            } catch (e) {}
+            if (window.pageContext && window.pageContext.content) {
+                opts.context = window.pageContext.content;
+            }
+            const result = await window.ContentIntelligenceAPI.suggestComponent(components, pageType, opts);
             
             if (result.success) {
                 displayComponentSuggestion(result.suggestion, resultsDiv);
@@ -1949,12 +1972,7 @@
         $('#page-title-display').text(context.title);
         $('#page-components-display').text(context.componentCount);
         $('#page-images-display').text(context.imagesWithoutAlt);
-
-        // Auto-fill context field with page title if empty
-        const contextField = $('#generate-context');
-        if (!contextField.val() || contextField.val().trim() === '') {
-            contextField.val(context.title);
-        }
+        // Do not auto-fill the Generate context; keep it blank by default
     }
 
     // Analyze current page and auto-fill all forms
@@ -1973,9 +1991,15 @@
         $('.copilot-tab[data-tab="seo"]').click();
         
         // Fill SEO form with page content
-        $('#seo-title').val(context.title);
+        // Prefer meta dc:title/og:title from the rendered page
+        const dcTitle = getDcOrOgTitleFromFrame();
+        $('#seo-title').val(dcTitle || context.title);
         $('#seo-content').val(context.content);
         $('#seo-meta').val(context.metaDescription);
+        // If title is blank, try Page Properties (jcr:content) asynchronously
+        if (!$('#seo-title').val() || $('#seo-title').val().trim() === '' || $('#seo-title').val().trim() === 'Untitled Page') {
+            tryPopulateSeoTitleFromPageProperties();
+        }
         
         // Show notification
         showNotification(`Page analyzed! Found ${context.componentCount} components and ${context.imagesWithoutAlt} images without alt text.`, 'success');
@@ -1984,6 +2008,135 @@
         setTimeout(() => {
             handleSEOAnalyze();
         }, 500);
+    }
+
+    function populateSeoFromContext() {
+        try {
+            const context = window.pageContext || extractPageContext();
+            const dc = getDcOrOgTitleFromFrame();
+            if ($('#seo-title').val().trim() === '') {
+                $('#seo-title').val(dc || context.title || '');
+            }
+            if ($('#seo-content').val().trim() === '') {
+                $('#seo-content').val(context.content || '');
+            }
+            if ($('#seo-meta').val().trim() === '') {
+                $('#seo-meta').val(context.metaDescription || '');
+            }
+            if (!$('#seo-title').val() || $('#seo-title').val().trim() === '' || $('#seo-title').val().trim() === 'Untitled Page') {
+                tryPopulateSeoTitleFromPageProperties();
+            }
+        } catch (e) {
+            // no-op
+        }
+    }
+
+    function getDcOrOgTitleFromFrame() {
+        try {
+            const frame = document.querySelector('iframe#ContentFrame') ||
+                          document.querySelector('iframe[name="ContentFrame"]');
+            const doc = frame && frame.contentDocument;
+            if (!doc) return null;
+            const dc = doc.querySelector('meta[name="dc:title"]');
+            if (dc && dc.content && dc.content.trim()) return dc.content.trim();
+            const og = doc.querySelector('meta[property="og:title"]');
+            if (og && og.content && og.content.trim()) return og.content.trim();
+            return null;
+        } catch (e) { return null; }
+    }
+
+    function getCurrentPagePathFromEditor() {
+        try {
+            if (window.Granite && window.Granite.author && window.Granite.author.ContentFrame) {
+                const p = window.Granite.author.ContentFrame.currentPath;
+                if (p && typeof p === 'string') return p;
+            }
+        } catch (e) {}
+        try {
+            const href = window.location.href || '';
+            const idx = href.indexOf('/editor.html/');
+            if (idx >= 0) {
+                let p = href.substring(idx + '/editor.html'.length);
+                const q = p.indexOf('?'); if (q >= 0) p = p.substring(0, q);
+                const h = p.indexOf('#'); if (h >= 0) p = p.substring(0, h);
+                p = p.replace(/\.html$/i, '');
+                return p;
+            }
+        } catch (e) {}
+        return null;
+    }
+
+    async function tryPopulateSeoTitleFromPageProperties() {
+        const $title = $('#seo-title');
+        if (!$title.length || ($title.val() && $title.val().trim() !== '')) return;
+        const pagePath = getCurrentPagePathFromEditor();
+        if (!pagePath) return;
+        // Try common endpoints for page properties
+        const endpoints = [
+            `${pagePath}.json`,
+            `${pagePath}/jcr:content.json`,
+            `${pagePath}.model.json`
+        ];
+        let found = '';
+        for (let i = 0; i < endpoints.length; i++) {
+            const url = endpoints[i];
+            try {
+                const resp = await fetch(url, { credentials: 'same-origin' });
+                if (!resp.ok) continue;
+                const data = await resp.json();
+                // jcr:content path
+                const contentNode = data && (data['jcr:content'] || data['jcr:Content'] || data[':items'] || null);
+                if (contentNode) {
+                    const t = contentNode['jcr:title'] || contentNode['pageTitle'] || contentNode['navTitle'] || contentNode['cq:title'] || '';
+                    if (t && typeof t === 'string') { found = t.trim(); break; }
+                }
+                // model.json might expose title directly
+                const mt = data && (data['title'] || (data['item'] && data['item']['title']));
+                if (mt && typeof mt === 'string') { found = mt.trim(); break; }
+            } catch (e) {
+                // ignore and try next
+            }
+        }
+        if (found) {
+            $title.val(found);
+        }
+    }
+
+    async function tryRefreshTitlesFromPageProperties() {
+        const pagePath = getCurrentPagePathFromEditor();
+        if (!pagePath) return;
+        const endpoints = [
+            `${pagePath}.json`,
+            `${pagePath}/jcr:content.json`,
+            `${pagePath}.model.json`
+        ];
+        let found = '';
+        for (let i = 0; i < endpoints.length; i++) {
+            const url = endpoints[i];
+            try {
+                const resp = await fetch(url, { credentials: 'same-origin' });
+                if (!resp.ok) continue;
+                const data = await resp.json();
+                const contentNode = data && (data['jcr:content'] || data['jcr:Content'] || data[':items'] || null);
+                if (contentNode) {
+                    const t = contentNode['jcr:title'] || contentNode['pageTitle'] || contentNode['navTitle'] || contentNode['cq:title'] || '';
+                    if (t && typeof t === 'string') { found = t.trim(); break; }
+                }
+                const mt = data && (data['title'] || (data['item'] && data['item']['title']));
+                if (mt && typeof mt === 'string') { found = mt.trim(); break; }
+            } catch (e) {
+                // continue
+            }
+        }
+        if (found) {
+            if (!window.pageContext) window.pageContext = {};
+            window.pageContext.title = found;
+            $('#page-title-display').text(found);
+            const $seoTitle = $('#seo-title');
+            if ($seoTitle.length && (!$seoTitle.val() || $seoTitle.val().trim() === '' || $seoTitle.val().trim() === 'Untitled Page')) {
+                $seoTitle.val(found);
+            }
+        }
     }
 
     // Show notification
